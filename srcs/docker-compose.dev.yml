@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: mariadb
     image: mariadb
-    env_file: .env
+    env_file: .env.dev
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -29,7 +29,7 @@ services:
       dockerfile: Dockerfile
     container_name: wordpress
     image: wordpress
-    env_file: .env
+    env_file: .env.dev
     environment:
       WP_DB_HOST: ${WP_DB_HOST}
       WP_DB_NAME: ${WP_DB_NAME}
@@ -57,7 +57,7 @@ services:
       dockerfile: Dockerfile
     container_name: nginx
     image: nginx
-    env_file: .env
+    env_file: .env.dev
     environment:
       DOMAIN_NAME: ${DOMAIN_NAME}
     ports:
@@ -70,20 +70,13 @@ services:
       - wordpress
     restart: unless-stopped
 
+# Volumes Docker gérés (pour développement local)
 volumes:
   wordpress_data:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /home/${USER}/data/wordpress
 
   mariadb_data:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /home/${USER}/data/mariadb
 
 networks:
   inception_network:
