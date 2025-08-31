@@ -81,3 +81,21 @@ help:
 	@echo "  clean  - Prune Docker resources (no data deletion)"
 	@echo "  fclean - Full cleanup including local data volumes"
 	@echo "  re     - Rebuild everything from scratch"
+
+
+docker compose -f srcs/docker-compose.yml exec --user www-data wordpress sh -lc 'set -e
+WP_PATH="";
+for p in /var/www/html /var/www/wordpress /usr/src/wordpress /var/www; do
+  if [ -f "$p/wp-config.php" ] || [ -d "$p/wp-admin" ]; then
+    WP_PATH="$p"; break;
+  fi
+done
+if [ -z "$WP_PATH" ]; then
+  echo "Impossible de trouver l’installation WordPress (wp-config.php)."; exit 1;
+fi
+echo "Using WP_PATH=$WP_PATH";
+wp --path="$WP_PATH" option update siteurl https://yohanafi.42.fr;
+wp --path="$WP_PATH" option update home https://yohanafi.42.fr;
+wp --path="$WP_PATH" cache flush;
+wp --path="$WP_PATH" option get siteurl;
+wp --path="$WP_PATH" option get home;'
