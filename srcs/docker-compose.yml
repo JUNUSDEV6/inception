@@ -19,8 +19,8 @@ services:
       - inception_network
     restart: unless-stopped
     healthcheck:
-      # ping avec credentials (plus fiable)
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"${MARIADB_ROOT_PASSWORD}\" --connect-timeout=5 || exit 1"]
+      # ping avec credentials (plus fiable) — on lit le mot de passe DANS le conteneur
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MARIADB_ROOT_PASSWORD}\" --connect-timeout=5 || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20

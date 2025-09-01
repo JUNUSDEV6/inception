@@ -1,26 +1,27 @@
 FROM debian:bullseye
 
-# Install NGINX
-RUN apt-get update && apt-get install -y \
-    nginx \
-    openssl \
-    && rm -rf /var/lib/apt/lists/*
+# Éviter les prompts interactifs
+ENV DEBIAN_FRONTEND=noninteractive
 
-# Copy configuration
-COPY conf/nginx.conf /etc/nginx/nginx.conf
-COPY conf/default.conf /etc/nginx/sites-available/default
-COPY tools/docker-entrypoint.sh /usr/local/bin/
+# Installer NGINX + OpenSSL
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    nginx openssl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 
-# Make script executable
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+# Répertoires & logs vers stdout/stderr (bonne pratique Docker)
+RUN mkdir -p /etc/nginx/ssl /var/www/html \
+ && ln -sf /dev/stdout /var/log/nginx/access.log \
+ && ln -sf /dev/stderr /var/log/nginx/error.log
 
-# Create SSL directory
-RUN mkdir -p /etc/nginx/ssl
+# Copier la conf globale + le vhost + l'entrypoint
+COPY conf/nginx.conf            /etc/nginx/nginx.conf
+COPY conf/default.conf          /etc/nginx/sites-available/default
+COPY tools/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-# Remove default site link
-RUN rm -f /etc/nginx/sites-enabled/default
+# Activer l'entrypoint et désactiver tout site enabled par défaut
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
+ && rm -f /etc/nginx/sites-enabled/default
 
-# Expose port
 EXPOSE 443
 
 ENTRYPOINT ["docker-entrypoint.sh"]
