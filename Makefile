@@ -82,3 +82,18 @@ help:
 	@echo "  fclean - Full cleanup including local data volumes"
 	@echo "  re     - Rebuild everything from scratch"
 
+docker compose -f srcs/docker-compose.yml exec -T --user www-data wordpress sh -lc '
+set -e
+WP_PATH="";
+for p in /var/www/html /var/www/wordpress /usr/src/wordpress /var/www; do
+  if [ -f "$p/wp-config.php" ] || [ -d "$p/wp-admin" ]; then
+    WP_PATH="$p"; break;
+  fi
+done
+[ -n "$WP_PATH" ] || { echo "WP introuvable"; exit 1; }
+echo "WP_PATH=$WP_PATH"
+wp --path="$WP_PATH" config get DB_NAME
+wp --path="$WP_PATH" config get DB_USER
+wp --path="$WP_PATH" config get DB_PASSWORD
+wp --path="$WP_PATH" config get DB_HOST
+'
