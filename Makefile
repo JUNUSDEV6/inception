@@ -21,7 +21,12 @@ RED    = \033[0;31m
 YELLOW = \033[1;33m
 NC     = \033[0m
 
-.PHONY: all setup build up down logs ps clean fclean re help fix-perms wp-url wp-rewrite nginx-test env-check
+# Nom réel du projet Compose (sert à retrouver les volumes préfixés)
+PROJECT_NAME        := $(shell basename $(dir $(COMPOSE_FILE)))
+VOLUME_WP           := $(PROJECT_NAME)_wp_data
+VOLUME_DB           := $(PROJECT_NAME)_db_data
+
+.PHONY: all setup build up down logs ps clean fclean re help fix-perms wp-url wp-rewrite nginx-test env-check proof demo
 
 # =======================
 # Cibles
@@ -88,7 +93,7 @@ fclean: down
 re: fclean up
 
 # =======================
-# Utilitaires pratiques
+# Utilitaires
 # =======================
 fix-perms:
 	@echo "$(YELLOW)Fixing permissions on $(DATA_PATH)...$(NC)"
@@ -104,3 +109,47 @@ wp-rewrite:
 
 nginx-test:
 	@$(DC) -f $(COMPOSE_FILE) exec -T nginx sh -lc 'nginx -t && nginx -T | grep -n "server_name "'
+
+# =======================
+# Preuves pour la soutenance
+# =======================
+proof:
+	@echo "$(YELLOW)[TLS only / Ports]$(NC)"
+	@$(DC) -f $(COMPOSE_FILE) exec -T nginx sh -lc 'ss -tlnp 2>/dev/null | grep ":443" || echo "KO: 443 not listening"'
+	@$(DC) -f $(COMPOSE_FILE) exec -T nginx sh -lc 'ss -tlnp 2>/dev/null | grep ":80"  || echo "OK: no listener on 80"'
+	@DOMAIN_NAME=$$(grep -E '^DOMAIN_NAME=' srcs/.env | cut -d= -f2); \
+	echo "$(YELLOW)[HTTP 80 check]$(NC)"; \
+	curl -sS http://$$DOMAIN_NAME -I || echo "OK: HTTP (80) non accessible"
+	@echo "$(YELLOW)[server_name Nginx]$(NC)"
+	@$(DC) -f $(COMPOSE_FILE) exec -T nginx nginx -T | grep -n "server_name "
+	@echo "$(YELLOW)[Reverse proxy vers PHP-FPM]$(NC)"
+	@$(DC) -f $(COMPOSE_FILE) exec -T nginx bash -lc 'exec 3<>/dev/tcp/wordpress/9000 && echo "OK: connexion vers wordpress:9000" || echo "KO: pas de connexion"'
+	@echo "$(YELLOW)[WordPress URLs]$(NC)"
+	@$(DC) -f $(COMPOSE_FILE) exec -T --user www-data wordpress sh -lc 'wp --path=/var/www/html option get siteurl && wp --path=/var/www/html option get home'
+	@echo "$(YELLOW)[Volumes persistants]$(NC)"
+	@echo "Volumes attendus: $(VOLUME_WP) et $(VOLUME_DB)"
+	@docker volume ls
+	@docker volume inspect $(VOLUME_WP) $(VOLUME_DB) 2>/dev/null | grep -E "Mountpoint|/home/$(LOGIN)/data" || echo "⚠️ Vérifie que les volumes existent bien sous ces noms."
+	@echo "$(YELLOW)[Images construites localement]$(NC)"
+	@docker images | grep -E "inception-(nginx|wordpress|mariadb)" || echo "⚠️ Vérifie les tags d'images"
+
+demo: up proof
+
+help:
+	@echo "$(GREEN)Targets:$(NC)"
+	@echo "  setup       - Create data directories with proper permissions"
+	@echo "  build       - Build Docker images"
+	@echo "  up          - Start all services (build + run)"
+	@echo "  down        - Stop and remove services"
+	@echo "  logs        - Tail all services logs"
+	@echo "  ps          - Show running containers"
+	@echo "  clean       - Prune Docker resources (non-destructive)"
+	@echo "  fclean      - Full cleanup (deletes local bind-mounted data)"
+	@echo "  re          - Redeploy from scratch"
+	@echo "  env-check   - Check env and computed paths"
+	@echo "  fix-perms   - Fix owners/permissions on data dirs"
+	@echo "  wp-url      - Print WordPress site/home URLs"
+	@echo "  wp-rewrite  - Flush WP cache and permalinks"
+	@echo "  nginx-test  - Test nginx config & server_name"
+	@echo "  proof       - Show proof points for evaluation"
+	@echo "  demo        - Run 'up' then 'proof'"
