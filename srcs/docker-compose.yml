@@ -1,37 +1,41 @@
-version: '3.8'
-
 services:
   mariadb:
     build:
       context: ./requirements/mariadb
       dockerfile: Dockerfile
+    # Pas d'image DockerHub : on tague notre build local
+    image: inception-mariadb
     container_name: mariadb
-    image: mariadb
     env_file: .env
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      # Recommandé avec MariaDB : préfixe MARIADB_*
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      MARIADB_DATABASE: ${MARIADB_DATABASE}
+      MARIADB_USER: ${MARIADB_USER}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD}
     volumes:
-      - mariadb_data:/var/lib/mysql
+      - db_data:/var/lib/mysql
     networks:
       - inception_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 20s
-      retries: 10
+      # ping avec credentials (plus fiable)
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"${MARIADB_ROOT_PASSWORD}\" --connect-timeout=5 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
 
   wordpress:
     build:
       context: ./requirements/wordpress
       dockerfile: Dockerfile
+    image: inception-wordpress
     container_name: wordpress
-    image: wordpress
     env_file: .env
     environment:
-      WP_DB_HOST: ${WP_DB_HOST}
+      # Ces variables sont lues par ton script d’init WP
+      WP_DB_HOST: ${WP_DB_HOST}        # ex: mariadb:3306
       WP_DB_NAME: ${WP_DB_NAME}
       WP_DB_USER: ${WP_DB_USER}
       WP_DB_PASSWORD: ${WP_DB_PASSWORD}
@@ -43,47 +47,62 @@ services:
       WP_USER_PASSWORD: ${WP_USER_PASSWORD}
       DOMAIN_NAME: ${DOMAIN_NAME}
     volumes:
-      - wordpress_data:/var/www/html
+      - wp_data:/var/www/html
     networks:
       - inception_network
     depends_on:
       mariadb:
         condition: service_healthy
     restart: unless-stopped
+    # (Optionnel) petit healthcheck “soft” pour WP
+    healthcheck:
+      test: ["CMD-SHELL", "php -v >/dev/null 2>&1 && test -f /var/www/html/wp-config.php"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
   nginx:
     build:
       context: ./requirements/nginx
       dockerfile: Dockerfile
+    image: inception-nginx
     container_name: nginx
-    image: nginx
     env_file: .env
     environment:
       DOMAIN_NAME: ${DOMAIN_NAME}
     ports:
       - "443:443"
     volumes:
-      - wordpress_data:/var/www/html:ro
+      - wp_data:/var/www/html:ro
     networks:
       - inception_network
     depends_on:
       - wordpress
     restart: unless-stopped
+    # (Optionnel) healthcheck basique : présence de certs + binaire nginx
+    healthcheck:
+      test: ["CMD-SHELL", "nginx -t >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
 
+# Volumes nommés mappés sur /home/<login>/data (exigences Inception)
 volumes:
-  wordpress_data:
+  wp_data:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: /home/${USER}/data/wordpress
+      device: /home/${LOGIN}/data/wordpress
 
-  mariadb_data:
+  db_data:
     driver: local
     driver_opts:
       type: none
       o: bind
-      device: /home/${USER}/data/mariadb
+      device: /home/${LOGIN}/data/mariadb
 
 networks:
   inception_network:
