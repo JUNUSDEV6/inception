@@ -26,7 +26,7 @@ PROJECT_NAME        := $(shell basename $(dir $(COMPOSE_FILE)))
 VOLUME_WP           := $(PROJECT_NAME)_wp_data
 VOLUME_DB           := $(PROJECT_NAME)_db_data
 
-.PHONY: all setup build up down logs ps clean fclean re help fix-perms wp-url wp-rewrite nginx-test env-check proof demo
+.PHONY: all setup build up down logs ps clean fclean re help fix-perms wp-url wp-rewrite nginx-test env-check proof demo db-proof db-proof-php db-proof-sql
 
 # =======================
 # Cibles
@@ -133,6 +133,46 @@ proof:
 	@echo "$(YELLOW)[Images construites localement]$(NC)"
 	@docker images | grep -E "inception-(nginx|wordpress|mariadb)" || echo "⚠️ Vérifie les tags d'images"
 
+# --- Preuve DB via WP-CLI (sans mysqlcheck), robuste sans heredoc ---
+db-proof:
+	@echo "$(YELLOW)[MariaDB reachable from WordPress (WP-CLI, no external mysql)]$(NC)"
+	@$(DC) -f $(COMPOSE_FILE) exec -T --user www-data wordpress sh -lc '\
+		set -e; \
+		cd /var/www/html; \
+		printf "%s\n" \
+"<?php" \
+"global \$$wpdb;" \
+"\$$wpdb->hide_errors();" \
+"\$$wpdb->query(\"SELECT 1\");" \
+"if (\$$wpdb->last_error) { fwrite(STDERR, \"KO: MySQL error: \".\$$wpdb->last_error.\"\\n\"); exit(1); }" \
+"echo \"OK: WordPress peut interroger MariaDB\\n\";" \
+> /tmp/wp_db_check.php; \
+		wp eval-file /tmp/wp_db_check.php --quiet \
+	'
+
+# --- Variante: test PHP mysqli pur (sans WP-CLI), robuste sans heredoc ---
+db-proof-php:
+	@echo "$(YELLOW)[MariaDB reachable from WordPress (PHP mysqli)]$(NC)"
+	@$(DC) -f $(COMPOSE_FILE) exec -T wordpress sh -lc '\
+		set -e; \
+		printf "%s\n" \
+"<?php" \
+"\$h=getenv(\"WP_DB_HOST\"); \$u=getenv(\"WP_DB_USER\"); \$p=getenv(\"WP_DB_PASSWORD\"); \$d=getenv(\"WP_DB_NAME\");" \
+"\$mysqli=@new mysqli(\$h,\$u,\$p,\$d);" \
+"if (\$mysqli->connect_errno) { fwrite(STDERR, \"MySQL connect error: \".\$mysqli->connect_error.\"\\n\"); exit(1); }" \
+"\$r=\$mysqli->query(\"SELECT 1\");" \
+"echo \$r ? \"OK: MySQL query successful\\n\" : \"KO: query failed\\n\";" \
+> /tmp/dbcheck.php; \
+		php /tmp/dbcheck.php \
+	'
+
+# --- Variante: ping côté serveur MariaDB ---
+db-proof-sql:
+	@echo "$(YELLOW)[MariaDB server alive (root inside mariadb)]$(NC)"
+	@$(DC) -f $(COMPOSE_FILE) exec -T mariadb sh -lc '\
+		mysqladmin -uroot -p"$$MARIADB_ROOT_PASSWORD" ping && echo "OK: MariaDB répond" || (echo "KO: MariaDB ne répond pas"; exit 1) \
+	'
+
 demo: up proof
 
 help:
@@ -152,4 +192,7 @@ help:
 	@echo "  wp-rewrite  - Flush WP cache and permalinks"
 	@echo "  nginx-test  - Test nginx config & server_name"
 	@echo "  proof       - Show proof points for evaluation"
+	@echo "  db-proof    - Check DB via WP-CLI"
+	@echo "  db-proof-php- Check DB via PHP mysqli"
+	@echo "  db-proof-sql- Check MariaDB server ping"
 	@echo "  demo        - Run 'up' then 'proof'"

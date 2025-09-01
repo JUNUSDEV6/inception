@@ -1,27 +1,18 @@
 [mysqld]
-bind-address = 0.0.0.0
-port = 3306
-user = mysql
-pid-file = /var/run/mysqld/mysqld.pid
-socket = /var/run/mysqld/mysqld.sock
-basedir = /usr
-datadir = /var/lib/mysql
-tmpdir = /tmp
-lc-messages-dir = /usr/share/mysql
+bind-address            = 0.0.0.0
+port                    = 3306
 
-# Logging
-log-error = /var/log/mysql/error.log
+# WordPress
+character-set-server    = utf8mb4
+collation-server        = utf8mb4_unicode_ci
 
-# Security
-skip-networking = false
-skip-bind-address
+# Sécurité/robustesse en container
+skip-host-cache
+skip-name-resolve
 
-# Character set
-character-set-server = utf8mb4
-collation-server = utf8mb4_unicode_ci
+# Chemins par défaut
+datadir                 = /var/lib/mysql
+socket                  = /run/mysqld/mysqld.sock
 
-# InnoDB settings
-innodb_buffer_pool_size = 128M
-innodb_log_file_size = 64M
-innodb_file_per_table = 1
-innodb_flush_method = O_DIRECT
+[client]
+default-character-set   = utf8mb4
