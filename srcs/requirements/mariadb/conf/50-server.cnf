@@ -1,18 +1,6 @@
 [mysqld]
-bind-address            = 0.0.0.0
-port                    = 3306
-
-# WordPress
-character-set-server    = utf8mb4
-collation-server        = utf8mb4_unicode_ci
-
-# Sécurité/robustesse en container
-skip-host-cache
-skip-name-resolve
-
-# Chemins par défaut
-datadir                 = /var/lib/mysql
-socket                  = /run/mysqld/mysqld.sock
-
-[client]
-default-character-set   = utf8mb4
+port = 3306
+datadir = /var/lib/mysql
+socket  = /run/mysqld/mysqld.sock
+bind_address=*
+user = mysql
